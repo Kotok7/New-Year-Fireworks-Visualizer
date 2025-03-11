@@ -1,9 +1,16 @@
+# requires pygame and (optional) dateutil
 import pygame
 import random
 import math
 import colorsys
 import datetime
 import sys
+
+try:
+    from dateutil.relativedelta import relativedelta
+    use_relativedelta = True
+except ImportError:
+    use_relativedelta = False
 
 pygame.init()
 info = pygame.display.Info()
@@ -18,6 +25,20 @@ def random_color():
     hue = random.random()
     r, g, b = colorsys.hsv_to_rgb(hue, 1, 1)
     return (int(r * 255), int(g * 255), int(b * 255))
+
+class Star:
+    def __init__(self):
+        self.x = random.randint(0, WIDTH)
+        self.y = random.randint(0, HEIGHT)
+        self.size = random.randint(1, 3)
+        self.phase = random.uniform(0, 2 * math.pi)
+    def update(self):
+        self.phase += 0.02
+    def draw(self, surface):
+        alpha = 128 + int(127 * (math.sin(self.phase) + 1) / 2)
+        star_surf = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(star_surf, (255, 255, 255, alpha), (self.size, self.size), self.size)
+        surface.blit(star_surf, (self.x, self.y))
 
 class Rocket:
     def __init__(self):
@@ -96,20 +117,25 @@ class Particle:
                 pygame.draw.circle(trail_surf, self.color + (alpha,), (self.size, self.size), self.size)
                 surface.blit(trail_surf, (int(pos[0] - self.size), int(pos[1] - self.size)))
         alpha = max(0, 255 - int(255 * (self.age / self.lifetime)))
+        glow_surf = pygame.Surface((self.size * 6, self.size * 6), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, self.color + (max(0, alpha // 2),), (self.size * 3, self.size * 3), self.size * 3)
+        surface.blit(glow_surf, (int(self.x - self.size * 3), int(self.y - self.size * 3)))
         particle_surf = pygame.Surface((self.size * 2, self.size * 2), pygame.SRCALPHA)
         pygame.draw.circle(particle_surf, self.color + (alpha,), (self.size, self.size), self.size)
         surface.blit(particle_surf, (int(self.x - self.size), int(self.y - self.size)))
     def is_dead(self):
         return self.age >= self.lifetime
 
-rockets = []
-rocket_timer = 0
 pygame.font.init()
 timer_font = pygame.font.SysFont("Arial", 64)
 message_font = pygame.font.SysFont("Arial", 96)
 close_font = pygame.font.SysFont("Arial", 24)
 close_button_rect = pygame.Rect(WIDTH - 50 if not sys.platform.startswith("darwin") else 10, 10, 40, 40)
+stars = [Star() for _ in range(100)]
+rockets = []
+rocket_timer = 0
 running = True
+
 while running:
     clock.tick(60)
     for event in pygame.event.get():
@@ -119,6 +145,9 @@ while running:
             if close_button_rect.collidepoint(event.pos):
                 running = False
     screen.fill((0, 0, 0))
+    for star in stars:
+        star.update()
+        star.draw(screen)
     if rocket_timer <= 0:
         rockets.append(Rocket())
         rocket_timer = random.randint(20, 50)
@@ -132,21 +161,31 @@ while running:
         rocket.draw(screen)
     rockets = [r for r in rockets if not r.is_dead()]
     now = datetime.datetime.now()
-    tomorrow = now + datetime.timedelta(days=1)
-    midnight = datetime.datetime(year=tomorrow.year, month=tomorrow.month, day=tomorrow.day, hour=0, minute=0, second=0)
-    diff = midnight - now
-    if diff.total_seconds() > 0:
-        total_seconds = int(diff.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        timer_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        timer_surface = timer_font.render(timer_text, True, (255, 255, 255))
+    target = datetime.datetime(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0)
+    if now < target:
+        if use_relativedelta:
+            rd = relativedelta(target, now)
+            countdown_text = f"{rd.months} months, {rd.days} days, {rd.hours:02d}:{rd.minutes:02d}:{rd.seconds:02d}"
+        else:
+            diff = target - now
+            total_seconds = int(diff.total_seconds())
+            days = total_seconds // 86400
+            months = days // 30
+            days = days % 30
+            hours = (total_seconds % 86400) // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            countdown_text = f"{months} months, {days} days, {hours:02d}:{minutes:02d}:{seconds:02d}"
+        timer_surface = timer_font.render(countdown_text, True, (255, 255, 255))
         timer_rect = timer_surface.get_rect(center=(WIDTH // 2, 50))
         screen.blit(timer_surface, timer_rect)
     else:
-        message_surface = message_font.render("Happy New Year!", True, (255, 255, 255))
-        message_rect = message_surface.get_rect(center=(WIDTH // 2, 50))
+        scale = 1 + 0.1 * math.sin(pygame.time.get_ticks() / 200.0)
+        msg = "Happy New Year!"
+        message_surface = message_font.render(msg, True, (255, 255, 255))
+        new_size = (int(message_surface.get_width() * scale), int(message_surface.get_height() * scale))
+        message_surface = pygame.transform.scale(message_surface, new_size)
+        message_rect = message_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2))
         screen.blit(message_surface, message_rect)
     pygame.draw.rect(screen, (200, 50, 50), close_button_rect)
     close_text_surface = close_font.render("X", True, (255, 255, 255))
