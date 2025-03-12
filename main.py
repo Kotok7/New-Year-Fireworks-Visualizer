@@ -1,3 +1,4 @@
+# made by @kotokk
 # requires pygame and (optional) dateutil
 import pygame
 import random
