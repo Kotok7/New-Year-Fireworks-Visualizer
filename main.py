@@ -1,5 +1,5 @@
 # made by @kotokk
-# requires pygame and (optional) dateutil
+# requires pygame and  (optional) dateutil
 import pygame
 import random
 import math
@@ -135,6 +135,7 @@ close_button_rect = pygame.Rect(WIDTH - 50 if not sys.platform.startswith("darwi
 stars = [Star() for _ in range(100)]
 rockets = []
 rocket_timer = 0
+pygame.mouse.set_visible(False)
 running = True
 
 while running:
@@ -149,6 +150,7 @@ while running:
     for star in stars:
         star.update()
         star.draw(screen)
+    WIND = math.sin(pygame.time.get_ticks() / 3000.0) * 0.5
     if rocket_timer <= 0:
         rockets.append(Rocket())
         rocket_timer = random.randint(20, 50)
